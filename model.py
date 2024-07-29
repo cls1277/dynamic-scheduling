@@ -92,7 +92,7 @@ class ModelHeterogene(torch.nn.Module):
             x_pass = layer(x_pass)
 
         probs = torch.cat((x[ready.squeeze(1).to(torch.bool)].squeeze(-1), x_pass), dim=0)
-        probs = F.softmax(probs)
+        probs = F.softmax(probs, dim=0)
 
         return probs, v
 

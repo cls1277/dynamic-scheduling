@@ -12,9 +12,14 @@ import pickle as pkl
 import torch
 from collections import namedtuple
 
+import warnings
+
+warnings.filterwarnings('ignore')
+
 if __name__ == '__main__':
 
-    model = torch.load('model_examples/cholesky_n=8_nGPU=2_nCPU=2/model_window=0.pth')
+    # model = torch.load('model_examples/cholesky_n=8_nGPU=2_nCPU=2/model_window=0.pth')
+    model = torch.load('runs/model_32.0.pth')
     model.eval()
 
     w_list = []
@@ -28,7 +33,7 @@ if __name__ == '__main__':
     env_type = 'chol'
     nGPU = 2
     window = 0
-    for n in [2, 4, 6, 8, 10, 12]:
+    for n in [2, 4, 6, 8, 10]:
         p_input = np.array([1] * nGPU + [0] * (4 - nGPU))
         env = DAGEnv(n, p_input, window, env_type=env_type)
         print(env.is_homogene)

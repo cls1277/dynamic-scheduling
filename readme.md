@@ -3,7 +3,7 @@ This is a Pytorch implementation of the paper: [READYS: A Reinforcement Learning
 
 ## Requirements
 
-  * Python 3.7
+  * Python 3.8.19
   * For the other packages, please refer to the requirements.txt.
   * Some packages (PyTorch, torch-geometric) may have to be installed separately.
 

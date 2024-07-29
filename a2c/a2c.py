@@ -9,12 +9,14 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 from torch.optim.lr_scheduler import CyclicLR, LambdaLR
+import warnings
 # from torch_geometric.data import Batch
 
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import gym
-from gym.wrappers import Monitor
+
+# from gym.wrappers import Monitor
 
 from collections import deque
 
@@ -129,9 +131,9 @@ class A2C:
 
         batch_size = self.config['trajectory_length']
 
-        actions = np.empty((batch_size,), dtype=np.int)
-        dones = np.empty((batch_size,), dtype=np.bool)
-        rewards, values = np.empty((2, batch_size), dtype=np.float)
+        actions = np.empty((batch_size,), dtype=int)
+        dones = np.empty((batch_size,), dtype=bool)
+        rewards, values = np.empty((2, batch_size), dtype=float)
         observations = []
         observation = self.env.reset()
         observation['graph'] = observation['graph'].to(device)
@@ -190,11 +192,18 @@ class A2C:
             if self.writer is not None and log_ratio * self.config['log_interval'] < n_step:
                 print('saving model if better than the previous one')
                 log_ratio += 1
-                self.writer.add_scalar('reward', np.mean(reward_log), n_step)
-                self.writer.add_scalar('time', np.mean(time_log), n_step)
-                self.writer.add_scalar('critic_loss', loss_value, n_step)
-                self.writer.add_scalar('actor_loss', loss_actor, n_step)
-                self.writer.add_scalar('entropy', loss_entropy, n_step)
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")
+                    if reward_log:
+                        self.writer.add_scalar('reward', np.mean(reward_log), n_step)
+                    if time_log:
+                        self.writer.add_scalar('time', np.mean(time_log), n_step)
+                    self.writer.add_scalar('critic_loss', loss_value, n_step)
+                    self.writer.add_scalar('actor_loss', loss_actor, n_step)
+                    self.writer.add_scalar('entropy', loss_entropy, n_step)
+                    if w:
+                        print(f"CATCH WARNINGS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: {w[-1].message}")
+
 
                 if self.noise > 0:
                     current_time = np.mean([self.evaluate(), self.evaluate(), self.evaluate()])
@@ -218,8 +227,10 @@ class A2C:
                 print('FPS: ', int(n_step / (end - start)))
 
             if self.scheduler is not None:
-                print(self.scheduler.get_lr())
-                self.scheduler.step(int(n_step/batch_size))
+                # print(self.scheduler.get_lr())
+                print(self.scheduler.get_last_lr())
+                # self.scheduler.step(int(n_step/batch_size))
+                self.scheduler.step()
 
         self.network = torch.load(string_save)
         results_last_model = []
