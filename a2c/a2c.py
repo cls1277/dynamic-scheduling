@@ -26,8 +26,8 @@ def make_seed(seed):
     torch.manual_seed(seed=seed)
 
 
-# use_cuda = torch.cuda.is_available()
-use_cuda = False
+use_cuda = torch.cuda.is_available()
+# use_cuda = False
 if use_cuda:
     device = torch.device('cuda')
     print("using GPU")

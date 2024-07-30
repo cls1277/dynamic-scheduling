@@ -10,7 +10,7 @@ class DAGEnv(gym.Env):
     def __init__(self, n, node_types, window, env_type, noise=False):
         if isinstance(node_types, int):
             p = node_types
-            node_types = np.ones(p)
+            node_types = np.ones(p) # 1代表GPU，0代表CPU
         else:
             p = len(node_types)
 
@@ -27,7 +27,7 @@ class DAGEnv(gym.Env):
         if self.env_type == 'LU':
             self.max_duration_cpu = max(durations_cpu_lu)
             self.max_duration_gpu = max(durations_gpu_lu)
-            self.task_data = ggen_denselu(self.n, self.noise)
+            self.task_data = ggen_denselu(self.n, self.noise) # 关于task的一些信息
         elif self.env_type == 'QR':
             self.max_duration_cpu = max(durations_cpu_qr)
             self.max_duration_gpu = max(durations_gpu_qr)
@@ -39,37 +39,37 @@ class DAGEnv(gym.Env):
         else:
             raise EnvironmentError('not implemented')
         self.num_nodes = self.task_data.num_nodes
-        self.sum_task = torch.sum(self.task_data.x, dim=0)
-        self.norm_desc_features = self.task_data.add_features_descendant()[0] / self.sum_task
-        self.cluster = Cluster(node_types=node_types.astype(int), communication_cost=np.zeros((p, p)))
-        self.running = -1 * np.ones(p)  # array of task number
-        self.running_task2proc = {}
+        self.sum_task = torch.sum(self.task_data.x, dim=0) # (4,) 每种类型有多少个task
+        self.norm_desc_features = self.task_data.add_features_descendant()[0] / self.sum_task # ？？？？？
+        self.cluster = Cluster(node_types=node_types.astype(int), communication_cost=np.zeros((p, p))) # 初始化，啥也没做
+        self.running = -1 * np.ones(p)  # array of task number 每个processor正在运行的task
+        self.running_task2proc = {} # 每个task分到哪个processor上
         self.ready_proc = np.zeros(p)  # for each processor, the time where it becomes available
         self.ready_tasks = []
         self.processed = {}
         self.compeur_task = 0
-        self.current_proc = 0
-        self.is_homogene = (np.mean(self.cluster.node_types) - 1) * np.mean(self.cluster.node_types) == 0
+        self.current_proc = 0 # 当前processor
+        self.is_homogene = (np.mean(self.cluster.node_types) - 1) * np.mean(self.cluster.node_types) == 0 # 是否既有CPU又有GPU
 
         self.critic_path_duration = None
         self.total_work_normalized = None
         # self.task_to_CP = np.zeros(len(self.task_graph.task_list))
 
         # compute heft
-        string_cluster = string.printable[:self.p]
-        dic_heft = {}
-        for edge in np.array(self.task_data.edge_index.t()):
+        string_cluster = string.printable[:self.p] # agent
+        dic_heft = {} # 用dic存DAG
+        for edge in np.array(self.task_data.edge_index.t()): # 从edge[0]到edge[1]的一条边
             dic_heft[edge[0]] = dic_heft.get(edge[0], ()) + (edge[1],)
 
         def compcost(job, agent):
             idx = string_cluster.find(agent)
-            duration = self.task_data.task_list[job].durations[self.cluster.node_types[idx]]
+            duration = self.task_data.task_list[job].durations[self.cluster.node_types[idx]] # 调utils.py的第66行
             return duration
 
         def commcost(ni, nj, A, B):
             return 0
 
-        orders, jobson = heft.schedule(dic_heft, string_cluster, compcost, commcost)
+        orders, jobson = heft.schedule(dic_heft, string_cluster, compcost, commcost) # jobson：？？？？？
         try:
             self.heft_time = orders[jobson[self.num_nodes - 1]][-1].end
         except:
@@ -79,7 +79,9 @@ class DAGEnv(gym.Env):
     def reset(self):
         # self.task_data = random_ggen_fifo(self.n, self.max_in, self.max_out, self.noise)
         if self.env_type == 'LU':
+            # temp = self.task_data
             self.task_data = ggen_denselu(self.n, self.noise)
+            # self.task_data.compare(temp) # 检查是否发生变化，不变
         elif self.env_type == 'QR':
             self.task_data = ggen_QR(self.n, self.noise)
         elif self.env_type == 'chol':
@@ -96,8 +98,8 @@ class DAGEnv(gym.Env):
 
         # compute initial doable tasks
 
-        new_ready_tasks = torch.arange(0, self.num_nodes)[torch.logical_not(isin(torch.arange(0, self.num_nodes), self.task_data.edge_index[1, :]))]
-        self.ready_tasks = new_ready_tasks.tolist()
+        new_ready_tasks = torch.arange(0, self.num_nodes)[torch.logical_not(isin(torch.arange(0, self.num_nodes), self.task_data.edge_index[1, :]))] # DAG找入度为0的结点
+        self.ready_tasks = new_ready_tasks.tolist() # 入度为0，表示准备好可以开始做这个task
 
         self.processed = {}
         self.compeur_task = 0
@@ -150,7 +152,7 @@ class DAGEnv(gym.Env):
             self.current_proc += 1
         if self.current_proc == self.p:
             # no new proc available
-            self.current_proc == 0
+            self.current_proc = 0
             self._forward_in_time()
         while (self.current_proc < self.p) and (self.running[self.current_proc] > -1):
             self.current_proc += 1
@@ -459,8 +461,8 @@ class DAGEnv(gym.Env):
             plt.savefig(fig_file)
         return
 
-    def export(self):
-        se
+    # def export(self):
+    #     se
 
 # legacy code
 class CholeskyTaskGraph(gym.Env):

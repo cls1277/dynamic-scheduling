@@ -17,8 +17,8 @@ import pickle as pkl
 durations_cpu = [18, 57, 52, 95, 0]
 durations_gpu = [11, 2, 8, 3, 0]
 
-durations_cpu_lu = [18, 95, 52, 52]
-durations_gpu_lu = [11, 3, 8, 8]
+durations_cpu_lu = [18, 95, 52, 52] # 下标是task类型
+durations_gpu_lu = [11, 3, 8, 8] # 下标是task类型
 
 durations_cpu_qr = [4, 6, 6, 10]
 durations_gpu_qr = [3, 3, 1, 1]
@@ -48,7 +48,7 @@ class Task():
         0: LU 1: BMOD 2: BDIV 3: FW
         """
 
-        self.type = barcode[0]
+        self.type = barcode[0] # 第barcode[1]个task的类型是barcode[0]
         if task_type=='chol':
             self.duration_cpu = durations_cpu[self.type]
             self.duration_gpu = durations_gpu[self.type]
@@ -62,8 +62,8 @@ class Task():
             self.duration_gpu = durations_gpu_qr[self.type]
         else:
             raise NotImplementedError('task type unknown')
-        self.barcode = barcode
-        self.durations = [self.duration_cpu, self.duration_gpu]
+        self.barcode = barcode # 第barcode[1]个task的类型是barcode[0]
+        self.durations = [self.duration_cpu, self.duration_gpu] # 这个task在cpu和gpu上的执行时间
         # if noise and self.type == 3:
         #     if np.random.uniform() < 1/15:
         #         self.durations[-1] *= 3
@@ -76,8 +76,40 @@ class TaskGraph(Data):
     def __init__(self, x, edge_index, task_list):
         Data.__init__(self, x, edge_index.to(torch.long))
         self.task_list = np.array(task_list)
-        self.task_to_num = {v: k for (k, v) in enumerate(self.task_list)}
-        self.n = len(self.x)
+        self.task_to_num = {v: k for (k, v) in enumerate(self.task_list)} # 第k个task是v，给定v返回k的字典
+        self.n = len(self.x) # task个数，结点个数
+
+    def compare(self, other):
+        if not isinstance(other, TaskGraph):
+            return "Cannot compare different types of objects."
+
+        differences = []
+        for attr in vars(self):
+            self_attr = getattr(self, attr)
+            other_attr = getattr(other, attr)
+
+            if type(self_attr) != type(other_attr):
+                differences.append(f"{attr}: type mismatch ({type(self_attr)} != {type(other_attr)})")
+                continue
+
+            try:
+                if isinstance(self_attr, torch.Tensor):
+                    if not torch.equal(self_attr, other_attr):
+                        differences.append(f"{attr}: Tensors are different")
+                elif isinstance(self_attr, (int, float, str, list, dict)):
+                    if self_attr != other_attr:
+                        differences.append(f"{attr}: {self_attr} != {other_attr}")
+                else:
+                    if self_attr != other_attr:
+                        differences.append(f"{attr}: {self_attr} != {other_attr}")
+            except Exception as e:
+                # differences.append(f"{attr}: Comparison failed with error {e}")
+                pass
+
+        if not differences:
+            print("Objects are equal.")
+        else:
+            print("Objects are not equal. Differences:\n" + "\n".join(differences))
 
     def render(self, root=None):
         # graph = self.data
@@ -97,16 +129,16 @@ class TaskGraph(Data):
                     isin(self.edge_index[1, :], torch.tensor(node_list))
         self.edge_index = self.edge_index[:, torch.logical_not(mask_edge)]
 
-    def add_features_descendant(self):
+    def add_features_descendant(self): # 计算后代特征（包括自己），作用：？？？？？
         n = self.n
         x = self.x
         succ_features = torch.zeros((n, 4))
         succ_features_norm = torch.zeros((n, 4))
         edges = self.edge_index
-        for i in reversed(range(n)):
-            succ_i = edges[1][edges[0] == i]
-            feat_i = x[i] + torch.sum(succ_features[succ_i], dim=0)
-            n_pred_i = torch.FloatTensor([torch.sum(edges[1] == j) for j in succ_i])
+        for i in reversed(range(n)): # DAG中永远是小结点指向大结点，所以逆序
+            succ_i = edges[1][edges[0] == i] # 起点是i，终点的集合
+            feat_i = x[i] + torch.sum(succ_features[succ_i], dim=0) # 当前结点特征与后继结点特征的求和
+            n_pred_i = torch.FloatTensor([torch.sum(edges[1] == j) for j in succ_i]) # 计算每个后继结点的前驱结点的数量
             if len(n_pred_i) == 0:
                 feat_i_norm = x[i]
             else:
@@ -128,7 +160,7 @@ class Cluster():
         :param communication_cost: [(u,v,w) with w weight]
         """
         self.node_types = node_types
-        self.node_state = np.zeros(len(node_types))
+        self.node_state = np.zeros(len(node_types)) # np.zeros(p)
         self.communication_cost = communication_cost
 
 
@@ -322,15 +354,16 @@ def compute_sub_graph(data, root_nodes, window):
         root_nodes = list_succ
         i += 1
 
-    assoc = torch.full((len(data.x),), -1, dtype=torch.long)
+    # 好像没用到assoc
+    assoc = torch.full((len(data.x),), -1, dtype=torch.long) # len(data.x)是task数量
     assoc[already_seen] = torch.arange(already_seen.sum())
 
-    node_num = torch.nonzero(already_seen)
-    new_x = data.x[already_seen]
-    new_edge_index = remove_nodes(data.edge_index, already_seen, len(data.x))
-    mask_edge = (new_edge_index != -1).all(dim=0)
+    node_num = torch.nonzero(already_seen) # 不是数量
+    new_x = data.x[already_seen] # （入度为0的点的个数）行4列，运行起点的x集合
+    new_edge_index = remove_nodes(data.edge_index, already_seen, len(data.x)) # 2行（边的个数）列
+    mask_edge = (new_edge_index != -1).all(dim=0) # 起点和终点全都是-1才删除
     new_edge_index = new_edge_index[:, mask_edge]
-    new_task_list = data.task_list[already_seen]
+    new_task_list = data.task_list[already_seen] # 起点的task集合
 
     return TaskGraph(new_x, new_edge_index, new_task_list), node_num
 
@@ -423,7 +456,7 @@ def ggen_denselu(n_vertex, noise=0):
         out = np.array([[int(subx.split(' -> ')[0][1:]), int(subx.split(' -> ')[1][:-1])] for subx in x])
         return out.transpose()
 
-    file_path = '/home/ngrinsztajn/HPC/graphs/denselu_{}.txt'.format(n_vertex)
+    file_path = 'graphs/denselu_{}.txt'.format(n_vertex)
     if os.path.exists(file_path):
         with open(file_path, 'r') as f:
             graph = f.read()
@@ -433,10 +466,10 @@ def ggen_denselu(n_vertex, noise=0):
     edges = parcours_and_purge_edges(graph)
     tasks = parcours_and_purge(graph)
     n = len(tasks)
-    x = np.zeros((n, 4), dtype=int)
+    x = np.zeros((n, 4), dtype=int) # binary-variable 1表示task是这个类型，0不是
     x[np.arange(n), tasks] = 1
     task_list = []
-    for i, t in enumerate(tasks):
+    for i, t in enumerate(tasks): # 第i个task的类型是t
         task_list.append(Task((t, i), noise=noise, task_type='LU'))
     return TaskGraph(x=torch.tensor(x, dtype=torch.float),
                 edge_index=torch.tensor(edges), task_list=task_list)

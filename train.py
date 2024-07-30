@@ -43,7 +43,7 @@ parser.add_argument('--nGPU', type=int, default=1, help='number of GPUs')
 parser.add_argument('--nCPU', type=int, default=3, help='number of cores')
 parser.add_argument('--window', type=int, default=0, help='window')
 parser.add_argument('--noise', type=float, default=0, help='noise')
-parser.add_argument('--env_type', type=str, default='QR', help='chol or LU or QR')
+parser.add_argument('--env_type', type=str, default='LU', help='chol or LU or QR')
 parser.add_argument('--seed_env', type=int, default=42, help='Random seed env ')
 
 args = parser.parse_args()

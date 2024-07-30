@@ -19,7 +19,16 @@ warnings.filterwarnings('ignore')
 if __name__ == '__main__':
 
     # model = torch.load('model_examples/cholesky_n=8_nGPU=2_nCPU=2/model_window=0.pth')
-    model = torch.load('runs/model_32.0.pth')
+
+    use_cuda = torch.cuda.is_available()
+    # use_cuda = False
+    if use_cuda:
+        device = torch.device('cuda')
+    else:
+        device = torch.device('cpu')
+
+    model = torch.load('runs/model_182.0.pth')
+    model.to(device)
     model.eval()
 
     w_list = []
@@ -30,10 +39,10 @@ if __name__ == '__main__':
     mean_time = []
 
 
-    env_type = 'chol'
+    env_type = 'LU'
     nGPU = 2
     window = 0
-    for n in [2, 4, 6, 8, 10]:
+    for n in [2, 4, 6, 8]:
         p_input = np.array([1] * nGPU + [0] * (4 - nGPU))
         env = DAGEnv(n, p_input, window, env_type=env_type)
         print(env.is_homogene)
@@ -47,6 +56,8 @@ if __name__ == '__main__':
         while (not done) :
             start_time = time.time()
             with torch.no_grad():
+                observation['graph'].x = observation['graph'].x.to(device)
+                observation['graph'].edge_index = observation['graph'].edge_index.to(device)
                 policy, value = model(observation)
             action_raw = policy.argmax().detach().cpu().numpy()
             ready_nodes = observation['ready'].squeeze(1).to(torch.bool)
